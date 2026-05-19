@@ -1,0 +1,256 @@
+# NexusOS - Docker Compose pour Coolify
+# Déploiement complet en une seule commande
+# Version: 1.0.0
+
+services:
+  # ============================================
+  # BASES DE DONNÉES & INFRASTRUCTURE
+  # ============================================
+
+  # PostgreSQL - Base de données principale
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_secure_password_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-nexus_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexus} -d ${POSTGRES_DB:-nexus_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: nexus-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-nexus_redis_password_2024}
+    volumes:
+      - redis_data:/data
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - Stockage objet (S3 compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: nexus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-nexusadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-nexus_secure_minio_2024}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - nexus-network
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # OpenSearch - Moteur de recherche & logs
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: nexus-opensearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD:-nexus_os_password_2024}
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ============================================
+  # APPLICATIONS NEXUSOS
+  # ============================================
+
+  # API Backend (NestJS)
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: nexus-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_secure_password_2024}@postgres:5432/${POSTGRES_DB:-nexus_db}?schema=public
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexus_redis_password_2024}
+      
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-nexusadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-nexus_secure_minio_2024}
+      MINIO_BUCKET: ${MINIO_BUCKET:-nexus-uploads}
+      MINIO_USE_SSL: "false"
+      
+      # OpenSearch
+      OPENSEARCH_NODE: http://opensearch:9200
+      
+      # JWT & Security
+      JWT_SECRET: ${JWT_SECRET:-nexus_super_secret_jwt_key_change_in_production_2024}
+      JWT_EXPIRES_IN: 24h
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-nexus_refresh_secret_change_me_2024}
+      
+      # AI Providers
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      
+      # Application
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      API_URL: ${API_URL:-http://localhost:4000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      
+      # Email (optionnel)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@nexusos.com}
+      
+      # Rate Limiting
+      RATE_LIMIT_TTL: 60
+      RATE_LIMIT_MAX: 100
+      
+      # Logging
+      LOG_LEVEL: info
+    networks:
+      - nexus-network
+    ports:
+      - "${API_PORT:-4000}:4000"
+    volumes:
+      - ./plugins:/app/plugins
+      - ./themes:/app/themes
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend Web (Next.js)
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: nexus-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-NexusOS}
+      NEXT_PUBLIC_WS_URL: ${WS_URL:-ws://localhost:4000}
+    networks:
+      - nexus-network
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Workers (BullMQ Queue Processors)
+  workers:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    container_name: nexus-workers
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nexus}:${POSTGRES_PASSWORD:-nexus_secure_password_2024}@postgres:5432/${POSTGRES_DB:-nexus_db}?schema=public
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexus_redis_password_2024}
+      
+      # AI Providers
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      
+      # API Internal
+      API_INTERNAL_URL: http://api:4000
+      
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-nexusadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-nexus_secure_minio_2024}
+      
+      # Worker Configuration
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      WORKER_EMAIL_ENABLED: "true"
+      WORKER_AI_ENABLED: "true"
+      WORKER_WORKFLOW_ENABLED: "true"
+      WORKER_ENRICHMENT_ENABLED: "true"
+      WORKER_SCRAPING_ENABLED: "true"
+    networks:
+      - nexus-network
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+
+networks:
+  nexus-network:
+    driver: bridge
+    name: nexus-network
+
+volumes:
+  postgres_data:
+    name: nexus-postgres-data
+  redis_data:
+    name: nexus-redis-data
+  minio_data:
+    name: nexus-minio-data
+  opensearch_data:
+    name: nexus-opensearch-data

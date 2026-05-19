@@ -1,0 +1,67 @@
+# ==================== .dockerignore ====================
+# Git
+.git
+.gitignore
+
+# Dependencies
+node_modules
+**/node_modules
+pnpm-lock.yaml
+
+# Build outputs
+dist
+.next
+build
+
+# Development files
+.env
+.env.local
+.env.*.local
+*.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+coverage
+**/*.test.ts
+**/*.spec.ts
+__tests__
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Scripts (not needed in production)
+scripts
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Coolify specific
+.coolify
+
+# Prisma dev files
+packages/core/prisma/migrations
+packages/core/**/*.db
+
+# Cache
+.turbo
+.cache
+tmp
+
+# Themes source (only built themes needed)
+themes/*/src
+
+# Plugin source (only built plugins needed)
+plugins/*/src
