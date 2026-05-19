@@ -1,0 +1,36 @@
+{
+  "name": "nexusos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise SaaS Platform - Modular Operating System for B2B Marketing & Sales",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/core/*",
+    "plugins/*",
+    "themes/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "db:migrate": "pnpm --filter @nexusos/core prisma migrate dev",
+    "db:generate": "pnpm --filter @nexusos/core prisma generate",
+    "plugin:create": "pnpm --filter @nexusos/sdk nexus-plugin create",
+    "theme:build": "pnpm --filter @nexusos/theme-engine build"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.0",
+    "@types/node": "^20.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
