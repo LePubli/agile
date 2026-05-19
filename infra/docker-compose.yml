@@ -1,0 +1,299 @@
+version: '3.8'
+
+services:
+  # ==================== DATABASE ====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexusos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexusos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexusos_secure_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-nexusos}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups/postgres:/backups
+    networks:
+      - nexusos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexusos} -d ${POSTGRES_DB:-nexusos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ==================== REDIS ====================
+  redis:
+    image: redis:7-alpine
+    container_name: nexusos-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-nexusos_redis_password_change_me}
+    volumes:
+      - redis_data:/data
+      - ./backups/redis:/backups
+    networks:
+      - nexusos-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ==================== MINIO (S3 Compatible) ====================
+  minio:
+    image: minio/minio:latest
+    container_name: nexusos-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-nexusos_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-nexusos_minio_password_change_me}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+      - ./backups/minio:/backups
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    networks:
+      - nexusos-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ==================== OPENSEARCH (Optional for Search) ====================
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: nexusos-opensearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD:-Admin123!}
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "plugins.security.disabled=true"
+      - "bootstrap.memory_lock=true"
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    networks:
+      - nexusos-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    profiles:
+      - with-search
+
+  # ==================== API (NestJS) ====================
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      args:
+        - NODE_ENV=production
+    container_name: nexusos-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nexusos}:${POSTGRES_PASSWORD:-nexusos_secure_password_change_me}@postgres:5432/${POSTGRES_DB:-nexusos}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexusos_redis_password_change_me}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-nexusos_admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-nexusos_minio_password_change_me}
+      MINIO_BUCKET: ${MINIO_BUCKET:-nexusos-assets}
+      JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change_this_encryption_key_in_production}
+      OPENSEARCH_URL: http://opensearch:9200
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      AI_ANTHROPIC_API_KEY: ${AI_ANTHROPIC_API_KEY:-}
+      AI_MISTRAL_API_KEY: ${AI_MISTRAL_API_KEY:-}
+      LOG_LEVEL: info
+      ENABLE_SWAGGER: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - nexusos-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # ==================== WEB (Next.js) ====================
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        - NODE_ENV=production
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    container_name: nexusos-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      API_URL: http://api:3000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3000/ws}
+    depends_on:
+      - api
+    networks:
+      - nexusos-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # ==================== WORKERS (BullMQ Processors) ====================
+  workers:
+    build:
+      context: ..
+      dockerfile: apps/workers/Dockerfile
+      args:
+        - NODE_ENV=production
+    container_name: nexusos-workers
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nexusos}:${POSTGRES_PASSWORD:-nexusos_secure_password_change_me}@postgres:5432/${POSTGRES_DB:-nexusos}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-nexusos_redis_password_change_me}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-nexusos_admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-nexusos_minio_password_change_me}
+      MINIO_BUCKET: ${MINIO_BUCKET:-nexusos-assets}
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      AI_ANTHROPIC_API_KEY: ${AI_ANTHROPIC_API_KEY:-}
+      AI_MISTRAL_API_KEY: ${AI_MISTRAL_API_KEY:-}
+      CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - nexusos-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Scale workers based on load
+    # deploy:
+    #   replicas: 3
+
+  # ==================== NGINX/TRAEFIK (Reverse Proxy - Optional) ====================
+  # Uncomment if not using Coolify's built-in proxy
+  # traefik:
+  #   image: traefik:v2.10
+  #   container_name: nexusos-traefik
+  #   restart: unless-stopped
+  #   command:
+  #     - "--api.dashboard=true"
+  #     - "--providers.docker=true"
+  #     - "--providers.docker.exposedbydefault=false"
+  #     - "--entrypoints.web.address=:80"
+  #     - "--entrypoints.websecure.address=:443"
+  #     - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+  #     - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+  #     - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "8080:8080"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - ./traefik/letsencrypt:/letsencrypt
+  #   networks:
+  #     - nexusos-network
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+  #     - "traefik.http.routers.dashboard.service=api@internal"
+  #     - "traefik.http.routers.dashboard.middlewares=auth"
+
+networks:
+  nexusos-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  opensearch_data:
+    driver: local
+
+# ==================== COOLIFY SPECIFIC ====================
+# Coolify will automatically handle:
+# - Reverse proxy (Traefik)
+# - SSL certificates
+# - Domain routing
+# - Health checks monitoring
+# - Auto-deployments from Git
+# - Environment variables management
+# - Resource limits
+# - Backup scheduling
