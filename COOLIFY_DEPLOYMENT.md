@@ -1,173 +1,228 @@
-# 🚀 Déploiement NexusOS sur Coolify - Résumé Exécutif
+# 🚀 Guide de Déploiement Coolify - NexusOS
 
-## ✅ Ce qui a été créé pour toi
+Ce guide vous accompagne pas à pas pour déployer NexusOS sur Coolify.
 
-### Fichiers Docker/Infrastructures
+## 📋 Prérequis
 
-| Fichier | Description |
-|---------|-------------|
-| `infra/docker-compose.yml` | Configuration complète (PostgreSQL, Redis, MinIO, API, Web, Workers) |
-| `infra/.env.example` | Template des variables d'environnement |
-| `infra/start.sh` | Script de démarrage rapide |
-| `infra/README.md` | Guide Docker complet |
-| `infra/DEPLOYMENT.md` | Guide de déploiement Coolify pas à pas |
-| `apps/api/Dockerfile` | Dockerfile multi-stage pour l'API NestJS |
-| `apps/web/Dockerfile` | Dockerfile multi-stage pour le frontend Next.js |
-| `apps/workers/Dockerfile` | Dockerfile pour les workers BullMQ |
-| `.dockerignore` | Filtres pour optimiser les builds Docker |
-| `packages/core/prisma/schema.prisma` | Schéma de base de données complet |
+- Instance Coolify installée et fonctionnelle
+- Domaine configuré (optionnel mais recommandé)
+- Clés API pour les providers IA (OpenAI, Anthropic, Mistral)
 
-## 🎯 3 Étapes pour Déployer
-
-### Étape 1: Préparer les Variables
+## 🎯 Étape 1 : Préparer le Repository
 
 ```bash
-cd /workspace/infra
-cp .env.example .env
-nano .env  # ou ton éditeur préféré
-```
-
-**Variables CRITIQUES à changer:**
-```bash
-POSTGRES_PASSWORD=<ton-mot-de-passe-sécurisé>
-REDIS_PASSWORD=<ton-mot-de-passe-sécurisé>
-MINIO_ROOT_PASSWORD=<ton-mot-de-passe-sécurisé>
-JWT_SECRET=$(openssl rand -hex 32)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-AI_OPENAI_API_KEY=sk-...
-NEXT_PUBLIC_API_URL=https://api.tondomaine.com
-```
-
-### Étape 2: Push sur Git
-
-```bash
-cd /workspace
+# Initialiser Git
+git init
 git add .
-git commit -m "Initial NexusOS deployment ready for Coolify"
-git push origin main
+git commit -m "feat: NexusOS initial commit - Ready for Coolify"
+
+# Créer un repository GitHub/GitLab
+git remote add origin https://github.com/VOTRE_USER/nexusos.git
+git branch -M main
+git push -u origin main
 ```
 
-### Étape 3: Configurer dans Coolify
+## 🎯 Étape 2 : Configuration dans Coolify
 
-1. **Connecte-toi à Coolify**
-2. **Add New Resource** → **Git Repository**
-3. **Sélectionne ton repo** et branche `main`
-4. **Build Pack**: `Docker Compose`
-5. **Colle** le contenu de `infra/docker-compose.yml`
-6. **Ajoute les variables** depuis ton `.env`
-7. **Deploy!** 🚀
+### 2.1 Créer un Nouveau Projet
 
-## 📦 Services Déployés
+1. Connectez-vous à Coolify
+2. Cliquez sur **"Create New Project"**
+3. Nommez-le `NexusOS`
 
-```
-┌─────────────────────────────────────────────┐
-│              COOLIFY MANAGED                │
-│  ┌─────────────────────────────────────┐    │
-│  │         TRAEFIK (Proxy/SSL)         │    │
-│  └─────────────────────────────────────┘    │
-│           ↓        ↓         ↓               │
-│  ┌──────────┐ ┌───────┐ ┌──────────────┐    │
-│  │   WEB    │ │  API  │ │   WORKERS    │    │
-│  │ :3001    │ │ :3000 │ │   (async)    │    │
-│  └──────────┘ └───────┘ └──────────────┘    │
-│           ↓        ↓         ↓               │
-│  ┌──────────┐ ┌───────┐ ┌──────────────┐    │
-│  │ POSTGRES │ │ REDIS │ │    MINIO     │    │
-│  │          │ │       │ │   (S3-like)  │    │
-│  └──────────┘ └───────┘ └──────────────┘    │
-└─────────────────────────────────────────────┘
-```
+### 2.2 Ajouter les Ressources
 
-## 🔗 URLs Après Déploiement
+Coolify peut gérer automatiquement PostgreSQL et Redis via Docker Compose, mais nous allons utiliser notre `docker-compose.yml` complet.
 
-| Service | URL Type |
-|---------|----------|
-| Web App | `https://app.tondomaine.com` |
-| API | `https://api.tondomaine.com` |
-| API Docs | `https://api.tondomaine.com/docs` |
-| MinIO Console | `https://minio.tondomaine.com` |
-| WebSocket | `wss://api.tondomaine.com/ws` |
+**Option A : Déploiement Docker Compose (Recommandé)**
 
-## ⚡ Commandes Utiles Post-Déploiement
+1. Dans votre projet, cliquez sur **"Add Service"**
+2. Sélectionnez **"Docker Compose"**
+3. Collez le contenu du `docker-compose.yml` OU pointez vers votre repo Git
+4. Coolify détectera automatiquement tous les services
 
+**Option B : Services Séparés**
+
+Si vous préférez gérer chaque service individuellement :
+
+#### Base de Données PostgreSQL
+- **Nom**: `nexus-postgres`
+- **Image**: `postgres:16-alpine`
+- **Variables d'environnement**:
+  ```
+  POSTGRES_USER=nexus
+  POSTGRES_PASSWORD=<générer_mot_de_passe_fort>
+  POSTGRES_DB=nexus_db
+  ```
+- **Volume**: `/var/lib/postgresql/data`
+
+#### Redis
+- **Nom**: `nexus-redis`
+- **Image**: `redis:7-alpine`
+- **Commande**: `redis-server --appendonly yes --requirepass <mot_de_passe>`
+- **Volume**: `/data`
+
+#### MinIO (Optionnel)
+- **Nom**: `nexus-minio`
+- **Image**: `minio/minio:latest`
+- **Commande**: `server /data --console-address ":9001"`
+- **Variables**:
+  ```
+  MINIO_ROOT_USER=nexusadmin
+  MINIO_ROOT_PASSWORD=<mot_de_passe_fort>
+  ```
+
+### 2.3 Déployer l'API (Backend NestJS)
+
+1. **Add Resource** → **Git Repository**
+2. Sélectionnez votre repo `nexusos`
+3. **Build Pack**: `Nixpacks` ou `Dockerfile`
+4. **Dockerfile**: `apps/api/Dockerfile`
+5. **Domain**: `api.votre-domaine.com` (optionnel)
+6. **Port**: `4000`
+7. **Variables d'environnement** (copiez depuis `.env.example`):
+   ```
+   NODE_ENV=production
+   PORT=4000
+   DATABASE_URL=postgresql://nexus:<password>@nexus-postgres:5432/nexus_db
+   REDIS_HOST=nexus-redis
+   REDIS_PORT=6379
+   REDIS_PASSWORD=<redis_password>
+   JWT_SECRET=<générer_clé_secrète>
+   OPENAI_API_KEY=sk-...
+   ANTHROPIC_API_KEY=sk-ant-...
+   MISTRAL_API_KEY=...
+   ```
+
+### 2.4 Déployer le Frontend (Next.js)
+
+1. **Add Resource** → **Git Repository**
+2. Même repo `nexusos`
+3. **Build Pack**: `Nixpacks` ou `Dockerfile`
+4. **Dockerfile**: `apps/web/Dockerfile`
+5. **Domain**: `app.votre-domaine.com`
+6. **Port**: `3000`
+7. **Variables d'environnement**:
+   ```
+   NODE_ENV=production
+   NEXT_PUBLIC_API_URL=https://api.votre-domaine.com
+   NEXT_PUBLIC_APP_NAME=NexusOS
+   ```
+
+### 2.5 Déployer les Workers
+
+1. **Add Resource** → **Git Repository**
+2. Même repo `nexusos`
+3. **Dockerfile**: `apps/workers/Dockerfile`
+4. **Port**: Aucun (service interne)
+5. **Variables d'environnement**: Mêmes que l'API +
+   ```
+   WORKER_CONCURRENCY=5
+   API_INTERNAL_URL=http://nexus-api:4000
+   ```
+
+## 🎯 Étape 3 : Exécuter les Migrations
+
+Une fois l'API déployée et fonctionnelle :
+
+### Via Coolify Console
+1. Allez sur le service `nexus-api`
+2. Ouvrez la **Console**
+3. Exécutez :
+   ```bash
+   npx prisma migrate deploy
+   npx prisma db seed
+   ```
+
+### Via Commande Locale (si accès SSH)
 ```bash
-# Via SSH sur ton serveur Coolify
-
-# Voir les logs
-docker compose logs -f api
-docker compose logs -f web
-
-# Status des services
-docker compose ps
-
-# Redémarrer un service
-docker compose restart api
-
-# Migrations DB
-docker compose exec api npx prisma migrate deploy
-
-# Backup DB
-docker compose exec postgres pg_dump -U nexusos nexusos > backup.sql
+coolify exec nexus-api npx prisma migrate deploy
+coolify exec nexus-api npx prisma db seed
 ```
 
-## 🛡️ Sécurité Checklist
+## 🎯 Étape 4 : Vérification
 
-- [ ] ✅ Changer TOUS les mots de passe par défaut
-- [ ] ✅ Générer JWT_SECRET et ENCRYPTION_KEY uniques
-- [ ] ✅ Configurer HTTPS (automatique via Coolify)
-- [ ] ✅ Ajouter tes clés API IA
-- [ ] ✅ Configurer les backups automatiques dans Coolify
-- [ ] ✅ Ne jamais committer `.env` dans Git
+### Health Checks
+- **API**: `https://api.votre-domaine.com/health`
+- **Web**: `https://app.votre-domaine.com/health`
 
-## 💰 Coût Estimé Infrastructure
+### Logs
+Vérifiez les logs dans Coolify pour chaque service :
+- API : Doit afficher "NestJS application started"
+- Web : Doit afficher "Ready on http://0.0.0.0:3000"
+- Workers : Doit afficher "Worker started"
 
-Pour ~100 tenants actifs:
+## 🎯 Étape 5 : Configuration DNS (Optionnel)
 
-| Ressource | Spécification | Coût/mois |
-|-----------|--------------|-----------|
-| VPS | 4 vCPU, 8GB RAM, 80GB SSD | ~$20-40 |
-| Domaine | .com | ~$12/an |
-| **Total** | | **~$30-50/mois** |
+Si vous utilisez des domaines personnalisés :
 
-Coolify est **gratuit** (open-source).
+```
+# Enregistrements DNS à ajouter chez votre registrar
+A     api      -> IP_de_votre_instance_Coolify
+A     app      -> IP_de_votre_instance_Coolify
+CNAME www      -> app.votre-domaine.com
+```
 
-## 📈 Scaling Path
+Dans Coolify :
+1. Allez sur chaque service
+2. **Settings** → **Domains**
+3. Ajoutez vos domaines personnalisés
+4. Coolify gérera automatiquement les certificats SSL via Let's Encrypt
 
-### Phase 1: Démarrage (0-100 tenants)
-- 1 serveur: 4 vCPU, 8GB RAM
-- Tous les services sur une machine
+## 🎯 Étape 6 : Premier Login
 
-### Phase 2: Croissance (100-1000 tenants)
-- 2-3 serveurs
-- Séparation API/Workers
-- Redis cluster
+1. Accédez à `https://app.votre-domaine.com`
+2. Créez votre premier compte administrateur
+3. Configurez vos premiers plugins
+4. Activez les modules souhaités
 
-### Phase 3: Scale (1000+ tenants)
-- Kubernetes
-- Microservices séparés
-- CDN pour assets
-- Database réplication
+## 🔧 Dépannage
 
-## 🆘 Support & Next Steps
+### L'API ne démarre pas
+```bash
+# Vérifier les logs
+coolify logs nexus-api
 
-### Après le déploiement:
+# Vérifier la connexion DB
+coolify exec nexus-api ping postgres
+```
 
-1. **Créer le premier tenant** via API
-2. **Configurer les plugins** nécessaires
-3. **Personnaliser le thème**
-4. **Inviter l'équipe**
-5. **Tester les workflows**
-6. **Connecter les providers IA**
+### Erreur de migration
+```bash
+# Reset et re-migrate
+coolify exec nexus-api npx prisma migrate reset
+coolify exec nexus-api npx prisma migrate deploy
+```
 
-### Documentation Complète:
+### Workers ne se connectent pas
+- Vérifiez que `REDIS_HOST` pointe vers le bon service
+- Vérifiez le mot de passe Redis
+- Redémarrez le service workers
 
-- Architecture: `/docs/ARCHITECTURE.md`
-- Specs Techniques: `/docs/TECHNICAL_SPEC.md`
-- Guide Docker: `/infra/README.md`
-- Guide Déploiement: `/infra/DEPLOYMENT.md`
+## 📊 Monitoring
+
+Coolify fournit nativement :
+- ✅ Métriques CPU/RAM
+- ✅ Logs en temps réel
+- ✅ Status des services
+- ✅ Alertes (à configurer)
+
+Pour un monitoring avancé, installez Prometheus + Grafana via Coolify Marketplace.
+
+## 🎉 C'est terminé !
+
+Votre NexusOS est maintenant déployé et opérationnel sur Coolify.
+
+**Prochaines étapes recommandées :**
+1. Configurer les sauvegardes automatiques (PostgreSQL)
+2. Mettre en place la surveillance (uptime, performance)
+3. Activer les notifications d'alerte
+4. Installer vos premiers plugins
+5. Configurer l'IA avec vos clés API
 
 ---
 
-**Prêt à déployer? Lance-toi! 🚀**
-
-Tu as tout ce qu'il faut pour une prod enterprise-grade.
+**Support & Documentation :**
+- Docs complètes : `/docs/ARCHITECTURE.md`
+- Spécifications techniques : `/docs/TECHNICAL_SPEC.md`
+- Issues GitHub : https://github.com/votre-repo/nexusos/issues
