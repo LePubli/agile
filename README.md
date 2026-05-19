@@ -1,249 +1,167 @@
 # NexusOS - Enterprise SaaS Platform
 
-## 🚀 Vision
+**Plateforme SaaS modulaire de type ERP/CRM enterprise-grade**, spécialisée dans la prospection B2B, le marketing digital, l'IA et l'automatisation.
 
-NexusOS est un système d'exploitation modulaire pour agences marketing, SDR, growth hackers et commerciaux B2B. Inspiré d'Odoo mais orienté prospection, marketing digital, IA et automatisation.
+## 🚀 Quick Start - Déploiement Coolify
+
+### 1. Cloner le repository
+```bash
+git clone https://github.com/votre-org/nexusos.git
+cd nexusos
+```
+
+### 2. Copier les variables d'environnement
+```bash
+cp .env.example .env
+# Éditez .env avec vos valeurs
+```
+
+### 3. Déployer sur Coolify
+
+Suivez le guide complet: **[infra/docker/coolify.md](infra/docker/coolify.md)**
+
+En résumé:
+1. Créez un projet "NexusOS" dans Coolify
+2. Ajoutez PostgreSQL, Redis, MinIO, OpenSearch
+3. Déployez les 3 services: API, Web, Workers
+4. Configurez votre domaine
+5. Exécutez les migrations DB
+
+### 4. Vérification
+- **Web**: https://votre-domaine.com
+- **API**: https://api.votre-domaine.com/docs
+- **MinIO**: https://minio.votre-domaine.com
 
 ## 📦 Architecture
 
 ```
 nexusos/
-├── apps/                    # Applications principales
-│   ├── web/                 # Frontend Next.js
-│   ├── api/                 # Backend NestJS
-│   └── workers/             # Workers BullMQ
-├── packages/                # Packages partagés
-│   ├── core/                # Core system (15 modules)
-│   │   ├── auth/            # Authentification
-│   │   ├── tenants/         # Multi-tenant
-│   │   ├── permissions/     # RBAC
-│   │   ├── plugin-engine/   # Moteur de plugins
-│   │   ├── theme-engine/    # Moteur de thèmes
-│   │   ├── event-bus/       # Système événementiel
-│   │   ├── billing/         # Facturation
-│   │   ├── logs/            # Audit logs
-│   │   ├── notifications/   # Notifications
-│   │   ├── api-gateway/     # API Gateway
-│   │   ├── settings/        # Paramètres
-│   │   ├── jobs/            # Jobs queue
-│   │   ├── security/        # Sécurité
-│   │   ├── marketplace/     # Marketplace
-│   │   └── sdk/             # SDK développeur
-│   └── ui/                  # UI components library
-├── plugins/                 # Plugins officiels
-│   ├── crm/                 # CRM complet
-│   ├── prospection/         # Prospection B2B
-│   ├── emailing/            # Emailing
-│   ├── workflows/           # Automatisation
-│   ├── ai-engine/           # IA Gateway
-│   ├── seo/                 # SEO tools
-│   ├── reputation/          # E-réputation
-│   ├── analytics/           # Analytics
-│   ├── calendar/            # Calendrier
-│   ├── files/               # Gestion fichiers
-│   ├── social-media/        # Social media
-│   ├── landing-pages/       # Landing pages
-│   ├── funnels/             # Funnels
-│   ├── telephony/           # Téléphonie
-│   ├── billing/             # Facturation avancée
-│   ├── support/             # Support client
-│   └── recruitment/         # Recrutement
-├── themes/                  # Thèmes officiels
-│   ├── default/             # Thème par défaut
-│   ├── dark-modern/         # Thème sombre moderne
-│   ├── light-professional/  # Thème clair pro
-│   └── custom-white-label/  # White-label custom
-├── infra/                   # Infrastructure
-│   ├── docker/              # Docker configs
-│   ├── kubernetes/          # K8s manifests
-│   └── traefik/             # Reverse proxy
-├── docs/                    # Documentation
-└── tools/                   # Outils de développement
+├── apps/
+│   ├── api/          # NestJS Backend (Port 4000)
+│   ├── web/          # Next.js Frontend (Port 3000)
+│   └── workers/      # BullMQ Workers
+├── packages/
+│   └── core/         # Modules core (15 modules)
+├── plugins/          # 18 plugins officiels
+├── themes/           # 4 thèmes
+├── infra/
+│   └── docker/       # Docker & Coolify configs
+└── docs/             # Documentation complète
 ```
 
-## 🛠 Stack Technique
+## 🔧 Stack Technique
 
-### Frontend
-- **Framework**: Next.js 14+ (App Router)
-- **Language**: TypeScript 5+
-- **Styling**: TailwindCSS + shadcn/ui
-- **State Management**: Zustand
-- **Data Fetching**: TanStack Query
-- **Forms**: React Hook Form + Zod
-- **Charts**: Recharts / Tremor
-- **Real-time**: Socket.io client
+**Frontend**: React, Next.js 14, TypeScript, TailwindCSS, shadcn/ui, Zustand  
+**Backend**: NestJS, PostgreSQL, Prisma, Redis, BullMQ, WebSockets  
+**Infra**: Docker, Kubernetes-ready, Traefik, MinIO, OpenSearch  
+**IA**: OpenAI, Anthropic, Mistral via AI Gateway  
 
-### Backend
-- **Framework**: NestJS
-- **Language**: TypeScript 5+
-- **Database**: PostgreSQL 16+
-- **ORM**: Prisma
-- **Cache**: Redis
-- **Queue**: BullMQ
-- **Search**: OpenSearch / Elasticsearch
-- **Real-time**: Socket.io / WebSockets
-- **API**: REST + GraphQL + WebSocket
+## 🎯 Fonctionnalités
 
-### Infrastructure
-- **Containerization**: Docker
-- **Orchestration**: Kubernetes (optionnel)
-- **Reverse Proxy**: Traefik
-- **Deployment**: Coolify / Railway / AWS
-- **Storage**: MinIO / S3
-- **CDN**: Cloudflare
+### Core System
+- ✅ Multi-tenant natif
+- ✅ Plugin engine avancé
+- ✅ Theme engine (white-label)
+- ✅ Event bus centralisé
+- ✅ Workflow engine (type Zapier)
+- ✅ AI Gateway multi-provider
+- ✅ RBAC avancé
+- ✅ Marketplace intégrée
 
-### IA
-- **Providers**: OpenAI, Anthropic, Mistral
-- **Gateway**: AI Gateway centralisé
-- **Agents**: SDRAgent, SEOAgent, ReputationAgent, etc.
+### Plugins Officiels (18)
+- CRM, Prospection B2B, Emailing
+- LinkedIn & WhatsApp Automation
+- SEO, E-réputation
+- AI Content Generation
+- Analytics, Reporting
+- Funnels, Landing Pages
+- Calendrier, Facturation
+- Et plus...
 
-## 🔌 Plugin System
+### AI Agents (8)
+- SDR Agent, SEO Agent, Reputation Agent
+- Copywriting Agent, Closing Agent
+- Audit Agent, Social Media Agent
+- Lead Scoring Agent
 
-Le cœur de NexusOS : TOUT est plugin.
+## 📚 Documentation
 
-### Structure d'un plugin
-
-```
-plugins/crm/
-├── plugin.json              # Manifeste
-├── signature.json           # Signature
-├── migrations/              # Migrations DB
-├── backend/                 # Backend NestJS
-│   ├── module.ts
-│   ├── controllers/
-│   ├── services/
-│   └── events/
-├── frontend/                # Frontend React
-│   ├── index.tsx
-│   ├── pages/
-│   ├── components/
-│   └── widgets/
-├── locales/                 # i18n
-└── assets/                  # Assets
-```
-
-### Commands CLI
-
-```bash
-# Créer un nouveau plugin
-pnpm plugin:create my-plugin
-
-# Développer avec hot-reload
-cd plugins/my-plugin
-pnpm dev
-
-# Build production
-pnpm build
-
-# Publier sur marketplace
-pnpm publish
-```
-
-## 🎨 Theme Engine
-
-Personnalisation complète de l'UI.
-
-```bash
-# Appliquer un thème
-POST /api/themes/apply
-{
-  "themeId": "dark-modern",
-  "config": { ... }
-}
-```
-
-## ⚡ Event Bus
-
-Système événementiel central.
-
-### Events principaux
-
-```typescript
-// CRM
-lead.created
-lead.updated
-deal.won
-deal.lost
-
-// Marketing
-email.sent
-email.opened
-campaign.completed
-
-// AI
-ai.task.finished
-ai.content.generated
-
-// Workflow
-workflow.triggered
-workflow.completed
-```
-
-## 🤖 AI Engine
-
-Gateway IA unifié avec fallback automatique.
-
-```typescript
-const response = await aiGateway.generate({
-  provider: 'auto', // Load balancing
-  model: 'gpt-4',
-  messages: [...],
-  fallback: ['anthropic', 'mistral']
-});
-```
+| Document | Description |
+|----------|-------------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture complète (3100+ lignes) |
+| [docs/TECHNICAL_SPEC.md](docs/TECHNICAL_SPEC.md) | Spécifications techniques |
+| [infra/docker/coolify.md](infra/docker/coolify.md) | Guide de déploiement Coolify |
 
 ## 🔐 Sécurité
 
-- RBAC avancé
-- Audit logs complets
+- 5 couches de sécurité
+- Plugin sandboxing (VM2)
 - Rate limiting
-- Plugin sandboxing
+- Audit logs
 - JWT rotation
-- OAuth2 / SSO
-- 2FA
 - CSP headers
-- Encrypted secrets
+- Non-root containers
 
-## 📊 Multi-Tenant
+## 💰 Business Model
 
-Isolation complète des données :
-- Row-level isolation (défaut)
-- Schema isolation (option)
-- Database isolation (enterprise)
+- 4 tiers: Free, Pro, Business, Enterprise
+- Marketplace avec revenue share 70/30
+- Credits system pour l'IA
+- White-label option
 
-## 🚀 Quick Start
+## 🛠️ Développement Local
 
+### Prérequis
+- Node.js 20+
+- Docker & Docker Compose
+- Git
+
+### Installation
 ```bash
 # Installer les dépendances
-pnpm install
+npm install
 
-# Générer Prisma client
-pnpm db:generate
+# Démarrer les services infra
+docker-compose up -d postgres redis minio
 
-# Lancer les migrations
-pnpm db:migrate
-
-# Démarrer en développement
-pnpm dev
-
-# Build production
-pnpm build
+# Lancer en développement
+npm run dev
 ```
 
-## 📖 Documentation Complète
+### Services locaux
+- Web: http://localhost:3000
+- API: http://localhost:4000
+- Swagger: http://localhost:4000/docs
+- MinIO: http://localhost:9000
+- MinIO Console: http://localhost:9001
 
-Voir [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) pour :
-- Architecture détaillée
-- Schémas de base de données
-- APIs complètes
-- SDK développeur
-- Stratégie de scaling
-- Roadmap technique
+## 📈 Scaling
+
+- Horizontal: Workers replicables
+- Vertical: Ressources ajustables
+- Database: Read replicas supportées
+- Cache: Redis cluster ready
+- Storage: S3-compatible (MinIO)
+
+## 🤝 Contributing
+
+1. Fork le projet
+2. Créez une branche feature
+3. Committez vos changements
+4. Push vers la branche
+5. Ouvrez une Pull Request
 
 ## 📄 License
 
-MIT - Voir LICENSE
+Propriétaire - Tous droits réservés
+
+## 📞 Support
+
+- Documentation: `/docs`
+- API Docs: `/docs` endpoint
+- Issues: GitHub Issues
+- Email: support@nexusos.com
 
 ---
 
-**NexusOS** - Built for scale, designed for extensibility.
+**NexusOS** - Built for scale, designed for growth.
