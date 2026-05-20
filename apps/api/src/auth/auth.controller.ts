@@ -45,7 +45,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getProfile(@Request() req) {
-    const user = await this.authService.validateUser(req.user.sub);
+    const user = await this.authService.validateUserById(req.user.sub);
     return { user };
   }
 }

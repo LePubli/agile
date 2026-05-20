@@ -5,6 +5,79 @@ interface ApiClientConfig {
   token?: string | null
 }
 
+interface LoginDto {
+  email: string
+  password: string
+}
+
+interface RegisterDto {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+}
+
+interface AuthResponse {
+  user: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
+    avatarUrl?: string
+  }
+  accessToken: string
+  refreshToken: string
+}
+
+interface Tenant {
+  id: string
+  name: string
+  slug: string
+  logoUrl?: string
+  status: string
+  createdAt: string
+}
+
+interface Plugin {
+  id: string
+  name: string
+  description: string
+  version: string
+  author: string
+  status: 'INSTALLED' | 'ACTIVE' | 'INACTIVE'
+  installedAt?: string
+}
+
+interface Workflow {
+  id: string
+  name: string
+  description: string
+  triggers: any[]
+  actions: any[]
+  status: 'ACTIVE' | 'INACTIVE'
+  createdAt: string
+}
+
+interface AiTask {
+  id: string
+  type: string
+  input: any
+  output?: any
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  createdAt: string
+  completedAt?: string
+}
+
+interface FileData {
+  id: string
+  filename: string
+  originalName: string
+  mimeType: string
+  size: number
+  url: string
+  uploadedAt: string
+}
+
 class ApiClient {
   private baseUrl: string
   private token: string | null
@@ -16,6 +89,20 @@ class ApiClient {
 
   setToken(token: string | null) {
     this.token = token
+    if (typeof window !== 'undefined') {
+      if (token) {
+        localStorage.setItem('token', token)
+      } else {
+        localStorage.removeItem('token')
+      }
+    }
+  }
+
+  getToken(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('token') || this.token
+    }
+    return this.token
   }
 
   private async request<T>(
@@ -25,12 +112,16 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`
     
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
       ...(options.headers || {}),
     }
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json'
+    }
+
+    const currentToken = this.getToken()
+    if (currentToken) {
+      headers['Authorization'] = `Bearer ${currentToken}`
     }
 
     const response = await fetch(url, {
@@ -46,117 +137,116 @@ class ApiClient {
     return response.json()
   }
 
-  // Auth endpoints
-  async login(email: string, password: string) {
-    return this.request<{ access_token: string; user: any }>('/api/auth/login', {
+  async login(data: LoginDto): Promise<AuthResponse> {
+    return this.request<AuthResponse>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(data),
     })
   }
 
-  async register(name: string, email: string, password: string) {
-    return this.request<{ access_token: string; user: any }>('/api/auth/register', {
+  async register(data: RegisterDto): Promise<AuthResponse> {
+    return this.request<AuthResponse>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify(data),
+    })
+  }
+
+  async logout() {
+    return this.request<{ message: string }>('/api/auth/logout', {
+      method: 'POST',
     })
   }
 
   async getProfile() {
-    return this.request<any>('/api/auth/me')
+    return this.request<{ user: AuthResponse['user'] }>('/api/auth/me')
   }
 
-  // Tenant endpoints
-  async getTenants() {
-    return this.request<any[]>('/api/tenants')
-  }
-
-  async createTenant(name: string, slug: string) {
-    return this.request<any>('/api/tenants', {
+  async refreshToken(refreshToken: string) {
+    return this.request<{ accessToken: string; refreshToken: string }>('/api/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ name, slug }),
+      body: JSON.stringify({ refreshToken }),
     })
   }
 
-  // Plugin endpoints
-  async getPlugins() {
-    return this.request<any[]>('/api/plugins')
+  async getTenants(): Promise<Tenant[]> {
+    return this.request<Tenant[]>('/api/tenants')
   }
 
-  async installPlugin(pluginId: string) {
-    return this.request<any>(`/api/plugins/${pluginId}/install`, {
-      method: 'POST',
-    })
+  async getTenantById(id: string): Promise<Tenant> {
+    return this.request<Tenant>(`/api/tenants/${id}`)
   }
 
-  async activatePlugin(pluginId: string) {
-    return this.request<any>(`/api/plugins/${pluginId}/activate`, {
-      method: 'POST',
-    })
-  }
-
-  // Workflow endpoints
-  async getWorkflows() {
-    return this.request<any[]>('/api/workflows')
-  }
-
-  async createWorkflow(data: any) {
-    return this.request<any>('/api/workflows', {
+  async createTenant(data: { name: string; slug: string; description?: string }): Promise<Tenant> {
+    return this.request<Tenant>('/api/tenants', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async executeWorkflow(workflowId: string) {
-    return this.request<any>(`/api/workflows/${workflowId}/execute`, {
+  async getPlugins(): Promise<Plugin[]> {
+    return this.request<Plugin[]>('/api/plugins')
+  }
+
+  async installPlugin(pluginId: string): Promise<Plugin> {
+    return this.request<Plugin>(`/api/plugins/${pluginId}/install`, {
       method: 'POST',
     })
   }
 
-  // AI endpoints
-  async createAiTask(data: any) {
-    return this.request<any>('/api/ai/tasks', {
+  async activatePlugin(pluginId: string): Promise<Plugin> {
+    return this.request<Plugin>(`/api/plugins/${pluginId}/activate`, {
+      method: 'POST',
+    })
+  }
+
+  async getWorkflows(): Promise<Workflow[]> {
+    return this.request<Workflow[]>('/api/workflows')
+  }
+
+  async createWorkflow(data: { name: string; description?: string; triggers: any[]; actions: any[] }): Promise<Workflow> {
+    return this.request<Workflow>('/api/workflows', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async getAiTasks() {
-    return this.request<any[]>('/api/ai/tasks')
+  async executeWorkflow(workflowId: string): Promise<{ executionId: string; status: string }> {
+    return this.request<{ executionId: string; status: string }>(`/api/workflows/${workflowId}/execute`, {
+      method: 'POST',
+    })
   }
 
-  // File endpoints
-  async uploadFile(file: File) {
+  async createAiTask(data: { type: string; input: any; provider?: string }): Promise<AiTask> {
+    return this.request<AiTask>('/api/ai/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getAiTasks(): Promise<AiTask[]> {
+    return this.request<AiTask[]>('/api/ai/tasks')
+  }
+
+  async uploadFile(file: File): Promise<FileData> {
     const formData = new FormData()
     formData.append('file', file)
-
-    const response = await fetch(`${this.baseUrl}/api/files/upload`, {
+    return this.request<FileData>('/api/files/upload', {
       method: 'POST',
-      headers: {
-        ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
-      },
       body: formData,
     })
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Upload failed' }))
-      throw new Error(error.message || `HTTP ${response.status}`)
-    }
-
-    return response.json()
   }
 
-  async getFiles() {
-    return this.request<any[]>('/api/files')
+  async getFiles(): Promise<FileData[]> {
+    return this.request<FileData[]>('/api/files')
   }
 
-  async deleteFile(fileId: string) {
-    return this.request<any>(`/api/files/${fileId}`, {
+  async deleteFile(id: string): Promise<void> {
+    return this.request<void>(`/api/files/${id}`, {
       method: 'DELETE',
     })
   }
 }
 
-// Create singleton instance
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
 export const api = new ApiClient({
@@ -165,3 +255,90 @@ export const api = new ApiClient({
 })
 
 export default api
+
+export function useAuth() {
+  const [user, setUser] = useState<AuthResponse['user'] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await api.getProfile()
+        setUser(response.user)
+        setError(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Authentication failed')
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    checkAuth()
+  }, [])
+
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await api.login({ email, password })
+      api.setToken(response.accessToken)
+      setUser(response.user)
+      setError(null)
+      return response
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed')
+      throw err
+    }
+  }
+
+  const register = async (data: RegisterDto) => {
+    try {
+      const response = await api.register(data)
+      api.setToken(response.accessToken)
+      setUser(response.user)
+      setError(null)
+      return response
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed')
+      throw err
+    }
+  }
+
+  const logout = async () => {
+    try {
+      await api.logout()
+    } catch (err) {
+      console.error('Logout error:', err)
+    } finally {
+      api.setToken(null)
+      setUser(null)
+    }
+  }
+
+  return { user, loading, error, login, register, logout }
+}
+
+export function useApi<T>(fetcher: () => Promise<T>, dependencies: any[] = []): { data: T | null; loading: boolean; error: string | null; refresh: () => void } {
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const result = await fetcher()
+      setData(result)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed')
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, dependencies)
+
+  return { data, loading, error, refresh: fetchData }
+}
