@@ -1,33 +1,16 @@
 ```
 # Dependencies
 node_modules/
-.pnpm-store/
 
 # Build outputs
 dist/
 build/
-.next/
-out/
-
-# Cache directories
-.cache/
-.nyc_output/
-coverage/
-.nuxt/
-public/build/
+target/
 
 # Environment variables
 .env
 .env.local
 .env.*
-!.env.example
-
-# Logs
-*.log
-
-# OS generated files
-.DS_Store
-Thumbs.db
 
 # IDE files
 .vscode/
@@ -35,22 +18,37 @@ Thumbs.db
 *.swp
 *.swo
 
-# Python specific
+# Logs
+*.log
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-*.so
-.pytest_cache/
-.mypy_cache/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Coverage reports
+coverage/
+htmlcov/
 .coverage
 
-# TypeScript/JavaScript
-*.tsbuildinfo
-*.js.map
-*.ts.map
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # Prisma
 prisma/migrations/
+*.psql
+
+# TypeScript
+*.tsbuildinfo
 ```
