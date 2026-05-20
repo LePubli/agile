@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventsGateway } from './events.gateway';
 
 export interface DomainEventPayload {
   type: string;
@@ -15,11 +16,12 @@ export class EventsService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private eventsGateway: EventsGateway,
   ) {}
 
   async publish(event: DomainEventPayload) {
     // Store event in database for event sourcing
-    await this.prisma.domainEvent.create({
+    const storedEvent = await this.prisma.domainEvent.create({
       data: {
         tenantId: event.tenantId,
         aggregateId: event.aggregateId,
@@ -33,7 +35,16 @@ export class EventsService {
     // Emit event for real-time processing
     this.eventEmitter.emit(event.type, event);
 
-    return { success: true, eventId: event.aggregateId };
+    // Broadcast to tenants via WebSocket
+    if (event.tenantId) {
+      this.eventsGateway.broadcastToTenant(event.tenantId, 'event', {
+        type: event.type,
+        payload: event.payload,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return { success: true, eventId: storedEvent.id };
   }
 
   async getEvents(tenantId: string, limit = 100) {

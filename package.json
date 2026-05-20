@@ -18,6 +18,8 @@
     "clean": "turbo run clean",
     "db:migrate": "pnpm --filter @nexusos/core prisma migrate dev",
     "db:generate": "pnpm --filter @nexusos/core prisma generate",
+    "db:seed": "ts-node prisma/seed.ts",
+    "db:reset": "pnpm db:migrate -- --reset && pnpm db:seed",
     "plugin:create": "pnpm --filter @nexusos/sdk nexus-plugin create",
     "theme:build": "pnpm --filter @nexusos/theme-engine build"
   },

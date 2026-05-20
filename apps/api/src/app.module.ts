@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { TenantsModule } from './tenants/tenants.module';
@@ -8,12 +9,18 @@ import { PluginsModule } from './plugins/plugins.module';
 import { EventsModule } from './events/events.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { AiModule } from './ai/ai.module';
+import { FilesModule } from './files/files.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    EventEmitterModule.forRoot({
+      wildcard: true,
+      delimiter: '.',
+      verboseReferenceData: true,
     }),
     JwtModule.register({}),
     PrismaModule,
@@ -23,6 +30,7 @@ import { AiModule } from './ai/ai.module';
     EventsModule,
     WorkflowsModule,
     AiModule,
+    FilesModule,
   ],
 })
 export class AppModule {}
