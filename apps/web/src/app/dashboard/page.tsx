@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useAuth, api, useApi } from '@/lib/api-client'
+import { useAuth } from '@/hooks/useAuth'
+import api from '@/lib/api'
 
 interface StatCardProps {
   title: string
@@ -34,23 +35,12 @@ interface GettingStartedStepProps {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, loading: authLoading, logout } = useAuth()
+  const { user, isLoading: authLoading, logout } = useAuth()
   const [tenant, setTenant] = useState<any>(null)
+  const [workflows, setWorkflows] = useState<any[]>([])
+  const [plugins, setPlugins] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   
-  // Fetch data using hooks
-  const { data: workflows } = useApi(
-    () => api.getWorkflows(),
-    [user]
-  )
-  const { data: plugins } = useApi(
-    () => api.getPlugins(),
-    [user]
-  )
-  const { data: aiTasks } = useApi(
-    () => api.getAiTasks(),
-    [user]
-  )
-
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login')
@@ -59,20 +49,36 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) {
-      api.getTenants().then((tenants) => {
-        if (tenants && tenants.length > 0) {
-          setTenant(tenants[0])
-        }
-      }).catch(console.error)
+      loadDashboardData()
     }
   }, [user])
 
-  const handleLogout = async () => {
-    await logout()
+  const loadDashboardData = async () => {
+    try {
+      const [tenantsRes, workflowsRes, pluginsRes] = await Promise.all([
+        api.get('/tenants').catch(() => ({ data: [] })),
+        api.get('/workflows').catch(() => ({ data: [] })),
+        api.get('/plugins').catch(() => ({ data: [] }))
+      ])
+      
+      if (tenantsRes.data && tenantsRes.data.length > 0) {
+        setTenant(tenantsRes.data[0])
+      }
+      setWorkflows(workflowsRes.data || [])
+      setPlugins(pluginsRes.data || [])
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    logout()
     router.push('/login')
   }
 
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -86,7 +92,6 @@ export default function DashboardPage() {
 
   const workflowCount = workflows?.length || 0
   const pluginCount = plugins?.filter((p: any) => p.status === 'ACTIVE').length || 0
-  const aiTaskCount = aiTasks?.filter((t: any) => t.status === 'COMPLETED').length || 0
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,7 +128,7 @@ export default function DashboardPage() {
               {tenant?.name || 'My Workspace'}
             </div>
             <div className="text-sm font-medium">
-              {user.firstName} {user.lastName}
+              {user.name || user.email}
             </div>
             <button
               onClick={handleLogout}
@@ -139,7 +144,7 @@ export default function DashboardPage() {
       <main className="container py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">
-            Welcome back, {user.firstName || user.email}
+            Welcome back, {user.name || user.email}
           </h1>
           <p className="text-muted-foreground">
             Here&apos;s an overview of your workspace
@@ -162,7 +167,7 @@ export default function DashboardPage() {
           />
           <StatCard
             title="AI Tasks"
-            value={aiTaskCount}
+            value="0"
             description="Tasks processed today"
             icon="🤖"
           />
@@ -219,14 +224,14 @@ export default function DashboardPage() {
                 timestamp="Just now"
                 icon="🎉"
               />
-              {workflows && workflows.length > 0 && (
+              {workflows.length > 0 && (
                 <ActivityItem
                   event={`${workflows.length} workflow(s) available`}
                   timestamp="Recently"
                   icon="⚡"
                 />
               )}
-              {plugins && plugins.length > 0 && (
+              {pluginCount > 0 && (
                 <ActivityItem
                   event={`${pluginCount} plugin(s) active`}
                   timestamp="Recently"
