@@ -1,0 +1,462 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MULTI-TENANCY & ORGANIZATION
+// ============================================
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  status      TenantStatus @default(ACTIVE)
+  plan        PlanType @default(FREE)
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  users       User[]
+  workspaces  Workspace[]
+  plugins     TenantPlugin[]
+  apiKeys     ApiKey[]
+  auditLogs   AuditLog[]
+  
+  @@index([slug])
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users       WorkspaceUser[]
+  projects    Project[]
+  workflows   Workflow[]
+  
+  @@index([tenantId])
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  avatarUrl     String?
+  emailVerified Boolean   @default(false)
+  status        UserStatus @default(PENDING)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  tenants       UserTenant[]
+  workspaces    WorkspaceUser[]
+  sessions      Session[]
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+  
+  @@unique([email])
+  @@index([email])
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model UserTenant {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      RoleType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, tenantId])
+}
+
+enum RoleType {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model WorkspaceUser {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        RoleType
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([workspaceId, userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  refreshToken String?  @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([userId])
+}
+
+// ============================================
+// PLUGIN SYSTEM
+// ============================================
+
+model Plugin {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  displayName String
+  description String?
+  version     String
+  author      String?
+  repository  String?
+  manifest    Json
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tenants     TenantPlugin[]
+  
+  @@index([name])
+}
+
+model TenantPlugin {
+  id         String   @id @default(uuid())
+  tenantId   String
+  pluginId   String
+  status     PluginStatus @default(INSTALLED)
+  settings   Json     @default("{}")
+  installedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plugin Plugin @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, pluginId])
+}
+
+enum PluginStatus {
+  INSTALLED
+  ACTIVATED
+  DEACTIVATED
+  UNINSTALLED
+}
+
+// ============================================
+// PROJECTS & RESOURCES
+// ============================================
+
+model Project {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  settings    Json     @default("{}")
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  environments Environment[]
+  deployments  Deployment[]
+  
+  @@index([workspaceId])
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+model Environment {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  variables   Json     @default("{}")
+  secrets     Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, name])
+}
+
+model Deployment {
+  id          String   @id @default(uuid())
+  projectId   String
+  environment String
+  commit      String?
+  branch      String?
+  status      DeploymentStatus @default(PENDING)
+  logs        String?
+  metadata    Json     @default("{}")
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  DEPLOYING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// WORKFLOWS & AUTOMATION
+// ============================================
+
+model Workflow {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  trigger     Json
+  actions     Json
+  enabled     Boolean  @default(true)
+  schedule    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+  
+  @@index([workspaceId])
+}
+
+model WorkflowExecution {
+  id          String   @id @default(uuid())
+  workflowId  String
+  status      ExecutionStatus @default(PENDING)
+  input       Json?
+  output      Json?
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  @@index([workflowId])
+  @@index([status])
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// AI TASKS & AGENTS
+// ============================================
+
+model AITask {
+  id         String   @id @default(uuid())
+  tenantId   String
+  type       AITaskType
+  provider   AIProvider
+  model      String
+  input      Json
+  output     Json?
+  status     TaskStatus @default(PENDING)
+  tokensUsed Int      @default(0)
+  cost       Decimal  @default(0)
+  error      String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@index([tenantId])
+  @@index([status])
+}
+
+enum AITaskType {
+  CHAT
+  COMPLETION
+  EMBEDDING
+  IMAGE_GENERATION
+  CODE_GENERATION
+  ANALYSIS
+}
+
+enum AIProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  LOCAL
+}
+
+enum TaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model AIAgent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  systemPrompt String
+  tools       Json     @default("[]")
+  model       String
+  provider    AIProvider
+  settings    Json     @default("{}")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([tenantId])
+}
+
+// ============================================
+// EVENTS & AUDIT LOGGING
+// ============================================
+
+model DomainEvent {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  aggregateId String
+  type        String
+  payload     Json
+  metadata    Json     @default("{}")
+  processed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  @@index([tenantId])
+  @@index([type])
+  @@index([processed])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String?
+  action    String
+  resource  String
+  resourceId String?
+  details   Json     @default("{}")
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================
+// API KEYS & SECURITY
+// ============================================
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  userId      String?
+  name        String
+  key         String   @unique
+  prefix      String
+  permissions Json     @default("[]")
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([key])
+  @@index([tenantId])
+}
+
+// ============================================
+// QUEUES & JOBS
+// ============================================
+
+model Job {
+  id         String   @id @default(uuid())
+  queue      String
+  data       Json
+  status     JobStatus @default(PENDING)
+  priority   Int      @default(0)
+  attempts   Int      @default(0)
+  maxAttempts Int     @default(3)
+  result     Json?
+  error      String?
+  scheduledAt DateTime?
+  startedAt  DateTime?
+  completedAt DateTime?
+  createdAt  DateTime @default(now())
+  
+  @@index([queue])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DELAYED
+}
