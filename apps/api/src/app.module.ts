@@ -10,6 +10,7 @@ import { EventsModule } from './events/events.module';
 import { WorkflowsModule } from './workflows/workflows.module';
 import { AiModule } from './ai/ai.module';
 import { FilesModule } from './files/files.module';
+import { EmailModule } from './common/services/email.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { FilesModule } from './files/files.module';
     WorkflowsModule,
     AiModule,
     FilesModule,
+    EmailModule,
   ],
 })
 export class AppModule {}

@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { EmailService } from '../common/services/email.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -12,6 +13,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -38,6 +40,13 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user.id, user.email);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    // Envoyer un email de bienvenue
+    try {
+      await this.emailService.sendWelcomeEmail(user.email, user.firstName || user.email);
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
+    }
 
     return {
       user: {
@@ -150,7 +159,36 @@ export class AuthService {
     });
   }
 
-  async validateUser(userId: string) {
+  async validateUser(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isPasswordValid) {
+      return null;
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+    };
+  }
+
+  async validateUserById(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
