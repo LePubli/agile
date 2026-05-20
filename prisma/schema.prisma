@@ -1,0 +1,348 @@
+// NexusOS Prisma Schema
+// Multi-tenant SaaS platform with AI, workflows, and plugin system
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MULTI-TENANCY & AUTHENTICATION
+// ============================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  domain    String?  @unique
+  logo      String?
+  settings  Json     @default("{}")
+  plan      String   @default("free") // free, pro, enterprise
+  status    String   @default("active") // active, suspended, deleted
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  members     Member[]
+  plugins     PluginInstallation[]
+  workflows   Workflow[]
+  aiTasks     AITask[]
+  events      Event[]
+  webhooks    Webhook[]
+  
+  @@index([slug])
+  @@index([status])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  avatar        String?
+  emailVerified DateTime?
+  role          Role      @default(USER)
+  status        String    @default("active") // active, inactive, banned
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions Session[]
+  members  Member[]
+  
+  @@index([email])
+  @@index([status])
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+  USER
+  GUEST
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      Role     @default(MEMBER)
+  status    String   @default("active") // active, pending, revoked
+  invitedAt DateTime @default(now())
+  joinedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  userAgent    String?
+  ip           String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============================================
+// PLUGIN SYSTEM
+// ============================================
+
+model Plugin {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  displayName String
+  description String?
+  version     String
+  author      String?
+  repository  String?
+  homepage    String?
+  icon        String?
+  category    String?
+  configSchema Json?
+  enabled     Boolean  @default(true)
+  verified    Boolean  @default(false)
+  downloads   Int      @default(0)
+  rating      Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  installations PluginInstallation[]
+  
+  @@index([enabled])
+  @@index([category])
+}
+
+model PluginInstallation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  pluginId   String
+  version    String
+  config     Json     @default("{}")
+  enabled    Boolean  @default(true)
+  installedBy String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plugin Plugin @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, pluginId])
+  @@index([tenantId])
+  @@index([pluginId])
+}
+
+// ============================================
+// EVENT SYSTEM (Event Sourcing)
+// ============================================
+
+model Event {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  type        String
+  source      String
+  action      String
+  entityId    String?
+  entityType  String?
+  data        Json
+  metadata    Json     @default("{}")
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([entityType, entityId])
+  @@index([processed])
+  @@index([createdAt])
+}
+
+// ============================================
+// WORKFLOW AUTOMATION
+// ============================================
+
+model Workflow {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  triggerType String   // manual, scheduled, event, webhook
+  triggerConfig Json?
+  steps       Json
+  enabled     Boolean  @default(true)
+  runCount    Int      @default(0)
+  lastRunAt   DateTime?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+  
+  @@index([tenantId])
+  @@index([enabled])
+  @@index([triggerType])
+}
+
+model WorkflowExecution {
+  id         String   @id @default(cuid())
+  workflowId String
+  status     String   @default("pending") // pending, running, completed, failed, cancelled
+  inputData  Json?
+  outputData Json?
+  error      String?
+  startedAt  DateTime?
+  completedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================
+// AI TASKS
+// ============================================
+
+model AITask {
+  id         String   @id @default(cuid())
+  tenantId   String
+  type       String   // completion, embedding, image, chat, analysis
+  provider   String   // openai, anthropic, cohere, stability, local
+  model      String?
+  status     String   @default("pending") // pending, processing, completed, failed
+  input      Json
+  output     Json?
+  parameters Json?
+  usage      Json?
+  error      String?
+  tokensUsed Int      @default(0)
+  cost       Decimal  @default(0)
+  createdAt  DateTime @default(now())
+  startedAt  DateTime?
+  completedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([type])
+  @@index([provider])
+  @@index([createdAt])
+}
+
+// ============================================
+// WEBHOOKS
+// ============================================
+
+model Webhook {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  url         String
+  secret      String?
+  events      String[] // Array of event types to subscribe to
+  enabled     Boolean  @default(true)
+  headers     Json?
+  lastTriggered DateTime?
+  successCount Int     @default(0)
+  failureCount Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([enabled])
+}
+
+model WebhookLog {
+  id        String   @id @default(cuid())
+  webhookId String
+  status    Int
+  request   Json
+  response  Json?
+  error     String?
+  duration  Int      // in ms
+  createdAt DateTime @default(now())
+
+  @@index([webhookId])
+  @@index([createdAt])
+}
+
+// ============================================
+// AUDIT LOGGING
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// API KEYS
+// ============================================
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  key         String   @unique
+  prefix      String   // For display purposes (e.g., "pk_live_...")
+  permissions String[] // Array of permission scopes
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([key])
+}
+
+// ============================================
+// RATE LIMITING
+// ============================================
+
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g., "api:user_id:endpoint"
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+
+  @@index([key])
+  @@index([resetAt])
+}

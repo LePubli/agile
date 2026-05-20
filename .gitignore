@@ -1,86 +1,56 @@
 ```
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build outputs
 dist/
 build/
-target/
+.next/
+out/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.ENV
+# Cache directories
+.cache/
+.nyc_output/
+coverage/
+.nuxt/
+public/build/
+
+# Environment variables
 .env
 .env.local
 .env.*
-.envrc
+!.env.example
 
 # Logs
 *.log
 
-# IDE
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.mypy_cache/
 .coverage
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
+# TypeScript/JavaScript
+*.tsbuildinfo
+*.js.map
+*.ts.map
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-
-# Gradle
-.gradle/
-
-# MyPy
-.mypy_cache/
-
-# PyTest
-.pytest_cache/
-
-# Git
-.git/
-
-# GitHub
-.github/
-
-# CI/CD
-.circleci/
-.travis.yml
+# Prisma
+prisma/migrations/
 ```
