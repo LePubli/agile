@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/api-client'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuth()
+  const { login, error: authError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,12 +20,15 @@ export default function LoginPage() {
 
     try {
       await login(email, password)
+      router.push('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }
   }
+
+  const displayError = error || authError
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary">
@@ -40,9 +43,9 @@ export default function LoginPage() {
           <p className="text-muted-foreground mt-2">Sign in to your NexusOS account</p>
         </div>
 
-        {error && (
+        {displayError && (
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-            {error}
+            {displayError}
           </div>
         )}
 

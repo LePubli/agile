@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/api-client'
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register } = useAuth()
-  const [name, setName] = useState('')
+  const { register, error: authError } = useAuth()
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,13 +21,21 @@ export default function RegisterPage() {
     setError('')
 
     try {
-      await register(name, email, password)
+      await register({
+        email,
+        password,
+        firstName,
+        lastName,
+      })
+      router.push('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }
   }
+
+  const displayError = error || authError
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary">
@@ -41,26 +50,42 @@ export default function RegisterPage() {
           <p className="text-muted-foreground mt-2">Start your NexusOS journey</p>
         </div>
 
-        {error && (
+        {displayError && (
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-            {error}
+            {displayError}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium mb-2">
-              Full name
-            </label>
-            <input
-              id="name"
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-              placeholder="John Doe"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="firstName" className="block text-sm font-medium mb-2">
+                First name
+              </label>
+              <input
+                id="firstName"
+                type="text"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                placeholder="John"
+              />
+            </div>
+            <div>
+              <label htmlFor="lastName" className="block text-sm font-medium mb-2">
+                Last name
+              </label>
+              <input
+                id="lastName"
+                type="text"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                placeholder="Doe"
+              />
+            </div>
           </div>
 
           <div>

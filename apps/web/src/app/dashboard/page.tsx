@@ -3,60 +3,90 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useAuth, api, useApi } from '@/lib/api-client'
+
+interface StatCardProps {
+  title: string
+  value: string | number
+  description: string
+  icon: string
+}
+
+interface QuickActionCardProps {
+  icon: string
+  title: string
+  description: string
+  href: string
+}
+
+interface ActivityItemProps {
+  event: string
+  timestamp: string
+  icon: string
+}
+
+interface GettingStartedStepProps {
+  step: number
+  title: string
+  description: string
+  icon: string
+}
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const { user, loading: authLoading, logout } = useAuth()
   const [tenant, setTenant] = useState<any>(null)
+  
+  // Fetch data using hooks
+  const { data: workflows } = useApi(
+    () => api.getWorkflows(),
+    [user]
+  )
+  const { data: plugins } = useApi(
+    () => api.getPlugins(),
+    [user]
+  )
+  const { data: aiTasks } = useApi(
+    () => api.getAiTasks(),
+    [user]
+  )
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (!authLoading && !user) {
       router.push('/login')
-      return
     }
+  }, [user, authLoading, router])
 
-    // Fetch user and tenant data
-    fetchUserData(token)
-  }, [router])
-
-  const fetchUserData = async (token: string) => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Unauthorized')
-      }
-
-      const data = await response.json()
-      setUser(data.user)
-      setTenant(data.tenant)
-    } catch (error) {
-      localStorage.removeItem('token')
-      router.push('/login')
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    if (user) {
+      api.getTenants().then((tenants) => {
+        if (tenants && tenants.length > 0) {
+          setTenant(tenants[0])
+        }
+      }).catch(console.error)
     }
-  }
+  }, [user])
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
+  const handleLogout = async () => {
+    await logout()
     router.push('/login')
   }
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
+
+  if (!user) {
+    return null
+  }
+
+  const workflowCount = workflows?.length || 0
+  const pluginCount = plugins?.filter((p: any) => p.status === 'ACTIVE').length || 0
+  const aiTaskCount = aiTasks?.filter((t: any) => t.status === 'COMPLETED').length || 0
 
   return (
     <div className="min-h-screen bg-background">
@@ -90,7 +120,10 @@ export default function DashboardPage() {
 
           <div className="flex items-center gap-4">
             <div className="text-sm text-muted-foreground">
-              {tenant?.name}
+              {tenant?.name || 'My Workspace'}
+            </div>
+            <div className="text-sm font-medium">
+              {user.firstName} {user.lastName}
             </div>
             <button
               onClick={handleLogout}
@@ -105,27 +138,31 @@ export default function DashboardPage() {
       {/* Dashboard Content */}
       <main className="container py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.name}</h1>
-          <p className="text-muted-foreground">Here&apos;s an overview of your workspace</p>
+          <h1 className="text-3xl font-bold mb-2">
+            Welcome back, {user.firstName || user.email}
+          </h1>
+          <p className="text-muted-foreground">
+            Here&apos;s an overview of your workspace
+          </p>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
             title="Active Workflows"
-            value="0"
+            value={workflowCount}
             description="Automations running"
             icon="⚡"
           />
           <StatCard
             title="Installed Plugins"
-            value="0"
+            value={pluginCount}
             description="Extensions active"
             icon="🔌"
           />
           <StatCard
             title="AI Tasks"
-            value="0"
+            value={aiTaskCount}
             description="Tasks processed today"
             icon="🤖"
           />
@@ -182,6 +219,20 @@ export default function DashboardPage() {
                 timestamp="Just now"
                 icon="🎉"
               />
+              {workflows && workflows.length > 0 && (
+                <ActivityItem
+                  event={`${workflows.length} workflow(s) available`}
+                  timestamp="Recently"
+                  icon="⚡"
+                />
+              )}
+              {plugins && plugins.length > 0 && (
+                <ActivityItem
+                  event={`${pluginCount} plugin(s) active`}
+                  timestamp="Recently"
+                  icon="🔌"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -215,7 +266,7 @@ export default function DashboardPage() {
   )
 }
 
-function StatCard({ title, value, description, icon }: { title: string; value: string; description: string; icon: string }) {
+function StatCard({ title, value, description, icon }: StatCardProps) {
   return (
     <div className="rounded-xl border bg-card p-6">
       <div className="flex items-center justify-between mb-4">
@@ -228,7 +279,7 @@ function StatCard({ title, value, description, icon }: { title: string; value: s
   )
 }
 
-function QuickActionCard({ icon, title, description, href }: { icon: string; title: string; description: string; href: string }) {
+function QuickActionCard({ icon, title, description, href }: QuickActionCardProps) {
   return (
     <Link
       href={href}
@@ -241,7 +292,7 @@ function QuickActionCard({ icon, title, description, href }: { icon: string; tit
   )
 }
 
-function ActivityItem({ event, timestamp, icon }: { event: string; timestamp: string; icon: string }) {
+function ActivityItem({ event, timestamp, icon }: ActivityItemProps) {
   return (
     <div className="flex items-start gap-3">
       <div className="text-xl">{icon}</div>
@@ -253,7 +304,7 @@ function ActivityItem({ event, timestamp, icon }: { event: string; timestamp: st
   )
 }
 
-function GettingStartedStep({ step, title, description, icon }: { step: number; title: string; description: string; icon: string }) {
+function GettingStartedStep({ step, title, description, icon }: GettingStartedStepProps) {
   return (
     <div className="flex gap-4">
       <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-2xl">
